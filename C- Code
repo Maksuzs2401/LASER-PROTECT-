@@ -1,0 +1,75 @@
+#include <Wire.h>     // For I2C protocol
+#include <Adafruit_ADS1X15.h>     // For ADS1115 
+#include <U8glib.h>     // For oled display
+U8GLIB_SH1106_128X64 oled(U8G_I2C_OPT_NONE);      //Defining oled type
+#define out_pin 6     // Defining pin 6 as gate driving pin
+#define rst_pin 7     // Defining pin 7 as reset pin 
+
+const float V_th = 115.000;   // Defining cutoff value 
+const float FSR = 0.1875;     // Full Scale Range per bit for ADS1115
+int16_t adc0;           // Global variable to hold ADC value
+float voltage;          // Global variable to hold converted voltage value
+Adafruit_ADS1115 ads;   // Create an ADS1115 object
+
+void setup() {
+  Serial.begin(115200);   // Start the Serial Monitor
+  pinMode(out_pin, OUTPUT);   // assigning pin 6 as output pin
+  pinMode(rst_pin, INPUT_PULLUP); // enabling internal pullup resistor of pin 7
+
+  
+  Serial.println("Initializing ADS1115...");    // print on serial monitor 
+  ads.begin();     // Initialize the ADS1115
+}
+
+void loop() {
+  read_analog_value();      // Calling function to read analog value
+    
+  //enters only when voltage reading is greater than the cutoff.
+  if(voltage >= V_th){
+    while(digitalRead(rst_pin) != LOW){     //will stay in the while loop  until and unless externel rst button is pressed as on pin 7.
+    digitalWrite(out_pin, LOW);       // will turn off the mosfet switch  
+    read_analog_value();
+    serial_display();
+    delay(1000);    //delay of 1 second
+    }
+  }
+  else{
+    digitalWrite(out_pin, HIGH);      // else it will keep mosfet on.
+  }
+
+  serial_display();     // Calling function to print on serial monitor
+  delay(1000);    // Add a small delay
+}
+
+// Function to read annlog value from ADS115
+void read_analog_value(){
+  adc0 = ads.readADC_SingleEnded(0);     // Read the analog input from channel 0 (A0 pin)
+  // Convert the ADC reading to voltage (assuming default gain)
+  // ADS1115 has a resolution of 16 bits and a reference voltage of 6.144V
+  voltage = adc0 * FSR;    // FSR = 12.288/65536 = 0.1875 = represents voltage of each bit   
+  oled_display(voltage);    // displaying on oled display  
+}
+
+// Function to print on Serial Monitor
+void serial_display(){
+  Serial.print("ADC0: "); 
+  Serial.print(adc0); 
+  Serial.print("\tVoltage: "); 
+  Serial.println(voltage, 6);      // Print the result
+}
+
+// Function to print on OLED 
+void oled_display(float voltage){
+  oled.firstPage();     // Begin the first page of the OLED display
+  do {
+    oled.setFont(u8g_font_profont12);     // Set the font for the displa
+    oled.setPrintPos(0, 15);      // Set the cursor position for the voltage label
+    oled.print("Voltage (in mV):");     // Print the voltage label
+    oled.setPrintPos(0, 25);
+    oled.print(voltage, 4);     // Print the voltage value with 4 decimal places
+    oled.setPrintPos(0, 45);
+    oled.print("Current (in mA):");
+    oled.setPrintPos(0, 55);
+    oled.print(voltage, 4);
+  } while (oled.nextPage() );
+}
